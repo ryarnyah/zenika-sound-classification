@@ -21,12 +21,14 @@ import librosa.display
 
 import librosa
 
-PLOT_WIDTH = 3.2
-PLOT_HEIGHT = 3.2
+PLOT_WIDTH = 4.8
+PLOT_HEIGHT = 4.8
 
 class DelegateDataGenerator(keras.utils.Sequence):
+
     def __init__(self, generators = []):
         self.generators = generators
+        self.on_epoch_end()
 
     def __len__(self):
         size = 0
@@ -42,8 +44,13 @@ class DelegateDataGenerator(keras.utils.Sequence):
             i += len(g)
         return None, None
 
+    def on_epoch_end(self):
+        self.indexes = list(range(len(self)))
+        np.random.shuffle(self.indexes)
+
     def __getitem__(self, index):
-        generator, current_index = self.__get_generator(index)
+        i = self.indexes[index]
+        generator, current_index = self.__get_generator(i)
         return generator.__getitem__(current_index)
 
 class DataGenerator(keras.utils.Sequence):
@@ -119,9 +126,9 @@ valid_test_generator = DelegateDataGenerator([valid_training_generator, valid_ba
 #model = keras.Model(inputs, outputs)
 
 ####
-nb_layers = 5
+nb_layers = 3
 pool_size = (2, 2)
-nb_filters = 32
+nb_filters = 64
 kernel_size = (3, 3)
 
 model = Sequential()
@@ -149,7 +156,7 @@ model.fit(x=test_generator,
 #          validation_data=valid_test_generator,
           use_multiprocessing=False,
           workers=4,
-          epochs=5,
+          epochs=20,
 )
 result = model.evaluate(valid_test_generator)
 print(dict(zip(model.metrics_names, result)))
