@@ -24,9 +24,11 @@ recognizer.ensureModelLoaded()
             // - result.scores contains the probability scores that correspond to
             //   recognizer.wordLabels().
             // - result.spectrogram contains the spectrogram of the recognized word.
-            console.log(recognizer.wordLabels()[result.scores.indexOf(Math.max.apply(Math, result.scores))]);
+            if (result.scores.indexOf(Math.max.apply(Math, result.scores)) > 0) {
+                console.log(recognizer.wordLabels()[result.scores.indexOf(Math.max.apply(Math, result.scores))]);
+            }
         }, {
             includeSpectrogram: true,
-            probabilityThreshold: 0.75
+            probabilityThreshold: 0.8
         });
     });
