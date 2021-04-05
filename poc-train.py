@@ -4,7 +4,6 @@ import os
 import random
 
 import librosa
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy import signal
 from scipy.io import wavfile
@@ -31,6 +30,8 @@ preproc_model = tf.keras.models.load_model(preproc_model_path)
 print(preproc_model.summary())
 print(preproc_model.input_shape)
 
+# Only 1s
+TARGET_SAMPLE_TIME = 1.0
 # Target sampling rate. It is required by the audio preprocessing model.
 TARGET_SAMPLE_RATE = 44100
 # The specific audio tensor length expected by the preprocessing model.
@@ -39,7 +40,7 @@ EXPECTED_WAVEFORM_LEN = preproc_model.input_shape[-1]
 # Where the Speech Commands v0.02 dataset has been downloaded.
 DATA_ROOT = "speech_commands_v0.02"
 
-WORDS = ("_background_noise_snippets_", "no", "yes")
+WORDS = ("_background_noise_snippets_", "yes")
 
 noise_wav_paths = glob.glob(os.path.join(DATA_ROOT, "_background_noise_", "*.wav"))
 snippets_dir = os.path.join(DATA_ROOT, "_background_noise_snippets_")
@@ -60,7 +61,7 @@ def extract_snippets(wav_path, snippet_duration_sec=1.0):
 
 for noise_wav_path in noise_wav_paths:
   print("Extracting snippets from %s..." % noise_wav_path)
-  extract_snippets(noise_wav_path, snippet_duration_sec=1.0)
+  extract_snippets(noise_wav_path, snippet_duration_sec=TARGET_SAMPLE_TIME)
 
 
 
@@ -83,7 +84,7 @@ def resample_wavs(dir_path, target_sample_rate=44100):
   wav_paths = glob.glob(os.path.join(dir_path, "*.wav"))
   resampled_suffix = "_%shz.wav" % target_sample_rate
   for i, wav_path in tqdm.tqdm(enumerate(wav_paths)):
-    if wav_path.endswith(resampled_suffix):
+    if wav_path.endswith(resampled_suffix) or 'split' not in wav_path:
       continue
     sample_rate, xs = wavfile.read(wav_path)
     xs = xs.astype(np.float32)
@@ -92,9 +93,43 @@ def resample_wavs(dir_path, target_sample_rate=44100):
     wavfile.write(resampled_path, target_sample_rate, xs)
 
 
+def add_noise(dir_path):
+  wav_paths = glob.glob(os.path.join(dir_path, "*.wav"))
+  for i, wav_path in tqdm.tqdm(enumerate(wav_paths)):
+    if 'data_aug' in wav_path or 'hz.wav' in wav_path:
+      continue
+    rate, wav = wavfile.read(wav_path)
+    wav_n = wav + 0.009 * np.random.normal(0, 1, len(wav))
+    wavfile.write(wav_path + '-data_aug_noise.wav', rate, wav_n)
+
+
+def timeshift(dir_path):
+  wav_paths = glob.glob(os.path.join(dir_path, "*.wav"))
+  for i, wav_path in tqdm.tqdm(enumerate(wav_paths)):
+    if 'data_aug' in wav_path or 'hz.wav' in wav_path:
+      continue
+    rate, wav = wavfile.read(wav_path)
+    wav_n = np.roll(wav, int(rate / 10))
+    wavfile.write(wav_path + '-data_aug-timeshift.wav', rate, wav_n)
+
+
+def split_to_time(dir_path):
+  wav_paths = glob.glob(os.path.join(dir_path, "*.wav"))
+  for wav in wav_paths:
+    rate, data = wavfile.read(wav)
+    batches = int(len(data) / (TARGET_SAMPLE_TIME * rate))
+    for i in range(batches):
+      wavfile.write(wav + '-data_aug-split' + '-' + str(i) + '.wav', rate, data[i * rate: (i+1) * rate])
+
+
 for word in WORDS:
   word_dir = os.path.join(DATA_ROOT, word)
   assert os.path.isdir(word_dir)
+  # data augmentation
+  print('data augmentation for %s' % word)
+  add_noise(word_dir)
+  timeshift(word_dir)
+  split_to_time(word_dir)
   resample_wavs(word_dir, target_sample_rate=TARGET_SAMPLE_RATE)
 
 @tf.function
