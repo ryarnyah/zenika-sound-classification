@@ -25,10 +25,14 @@ recognizer.ensureModelLoaded()
             //   recognizer.wordLabels().
             // - result.spectrogram contains the spectrogram of the recognized word.
             if (result.scores.indexOf(Math.max.apply(Math, result.scores)) > 0) {
+                document.getElementById('euhh').style.display = 'block';
+                setTimeout(function() {
+                    document.getElementById('euhh').style.display = 'none';
+                }, 1500);
                 console.log(recognizer.wordLabels()[result.scores.indexOf(Math.max.apply(Math, result.scores))]);
             }
         }, {
             includeSpectrogram: true,
-            probabilityThreshold: 0.8
+            probabilityThreshold: 0.7
         });
     });

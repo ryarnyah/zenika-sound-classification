@@ -38,9 +38,9 @@ TARGET_SAMPLE_RATE = 44100
 EXPECTED_WAVEFORM_LEN = preproc_model.input_shape[-1]
 
 # Where the Speech Commands v0.02 dataset has been downloaded.
-DATA_ROOT = "speech_commands_v0.02"
+DATA_ROOT = "final-data"
 
-WORDS = ("_background_noise_snippets_", "yes")
+WORDS = ("_background_noise_snippets_", "Euhh")
 
 noise_wav_paths = glob.glob(os.path.join(DATA_ROOT, "_background_noise_", "*.wav"))
 snippets_dir = os.path.join(DATA_ROOT, "_background_noise_snippets_")
@@ -135,11 +135,11 @@ for word in WORDS:
 @tf.function
 def read_wav(filepath):
   file_contents = tf.io.read_file(filepath)
-  return tf.expand_dims(tf.squeeze(tf.audio.decode_wav(
-      file_contents,
-      desired_channels=-1,
-      desired_samples=TARGET_SAMPLE_RATE).audio, axis=-1), 0)
-
+  audio = tf.audio.decode_wav(
+    file_contents,
+    desired_channels=1,
+    desired_samples=TARGET_SAMPLE_RATE).audio
+  return tf.expand_dims(tf.squeeze(audio, axis=-1), 0)
 
 @tf.function
 def filter_by_waveform_length(waveform, label):
@@ -150,7 +150,6 @@ def filter_by_waveform_length(waveform, label):
 def crop_and_convert_to_spectrogram(waveform, label):
   cropped = tf.slice(waveform, begin=[0, 0], size=[1, EXPECTED_WAVEFORM_LEN])
   return tf.squeeze(preproc_model(cropped), axis=0), label
-
 
 @tf.function
 def spectrogram_elements_finite(spectrogram, label):
