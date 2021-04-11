@@ -26,6 +26,7 @@ recognizer.ensureModelLoaded()
             // - result.spectrogram contains the spectrogram of the recognized word.
             if (result.scores.indexOf(Math.max.apply(Math, result.scores)) > 0) {
                 document.getElementById('euhh').style.display = 'block';
+                //document.getElementById('beep').play();
                 setTimeout(function() {
                     document.getElementById('euhh').style.display = 'none';
                 }, 1500);
@@ -33,7 +34,7 @@ recognizer.ensureModelLoaded()
             }
         }, {
             includeSpectrogram: true,
-            probabilityThreshold: 0.7,
+            probabilityThreshold: 0.9,
             overlapFactor: 0.2
         });
     });

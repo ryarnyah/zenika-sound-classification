@@ -20,7 +20,8 @@ module.exports = {
         new CopyPlugin({
             patterns: [
                 { from: 'src/model', to: 'model', force: true },
-                { from: 'src/euhhhh.gif', to: '.', force: true }
+                { from: 'src/euhhhh.gif', to: '.', force: true },
+                { from: 'src/742.mp3', to: '.', force: true }
             ]
         }),
     ],
