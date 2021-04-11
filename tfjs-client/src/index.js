@@ -29,10 +29,11 @@ recognizer.ensureModelLoaded()
                 setTimeout(function() {
                     document.getElementById('euhh').style.display = 'none';
                 }, 1500);
-                console.log(recognizer.wordLabels()[result.scores.indexOf(Math.max.apply(Math, result.scores))]);
+                console.log(result.scores);
             }
         }, {
             includeSpectrogram: true,
-            probabilityThreshold: 0.7
+            probabilityThreshold: 0.7,
+            overlapFactor: 0.2
         });
     });
