@@ -40,30 +40,7 @@ EXPECTED_WAVEFORM_LEN = preproc_model.input_shape[-1]
 # Where the Speech Commands v0.02 dataset has been downloaded.
 DATA_ROOT = "final-data"
 
-WORDS = ("_background_noise_snippets_", "Euhh")
-
-noise_wav_paths = glob.glob(os.path.join(DATA_ROOT, "_background_noise_", "*.wav"))
-snippets_dir = os.path.join(DATA_ROOT, "_background_noise_snippets_")
-os.makedirs(snippets_dir, exist_ok=True)
-
-
-def extract_snippets(wav_path, snippet_duration_sec=1.0):
-  basename = os.path.basename(os.path.splitext(wav_path)[0])
-  sample_rate, xs = wavfile.read(wav_path)
-  assert xs.dtype == np.int16
-  n_samples_per_snippet = int(snippet_duration_sec * sample_rate)
-  i = 0
-  while i + n_samples_per_snippet < len(xs):
-    snippet_wav_path = os.path.join(snippets_dir, "%s_%.5d.wav" % (basename, i))
-    snippet = xs[i : i + n_samples_per_snippet].astype(np.int16)
-    wavfile.write(snippet_wav_path, sample_rate, snippet)
-    i += n_samples_per_snippet
-
-for noise_wav_path in noise_wav_paths:
-  print("Extracting snippets from %s..." % noise_wav_path)
-  extract_snippets(noise_wav_path, snippet_duration_sec=TARGET_SAMPLE_TIME)
-
-
+WORDS = ("_background_noise_", "Euhh")
 
 def resample_wavs(dir_path, target_sample_rate=44100):
   """Resample the .wav files in an input directory to given sampling rate.
@@ -116,21 +93,12 @@ def timeshift(dir_path):
 def split_to_time(dir_path):
   wav_paths = glob.glob(os.path.join(dir_path, "*.wav"))
   for wav in wav_paths:
+    if 'split' in wav:
+      continue
     rate, data = wavfile.read(wav)
     batches = int(len(data) / (TARGET_SAMPLE_TIME * rate))
     for i in range(batches):
       wavfile.write(wav + '-data_aug-split' + '-' + str(i) + '.wav', rate, data[i * rate: (i+1) * rate])
-
-
-for word in WORDS:
-  word_dir = os.path.join(DATA_ROOT, word)
-  assert os.path.isdir(word_dir)
-  # data augmentation
-  print('data augmentation for %s' % word)
-  add_noise(word_dir)
-  timeshift(word_dir)
-  split_to_time(word_dir)
-  resample_wavs(word_dir, target_sample_rate=TARGET_SAMPLE_RATE)
 
 @tf.function
 def read_wav(filepath):
@@ -185,6 +153,17 @@ def get_dataset(input_wav_paths, labels):
   ds = ds.filter(spectrogram_elements_finite)
   return ds
 
+# Resample data
+for word in WORDS:
+  word_dir = os.path.join(DATA_ROOT, word)
+  assert os.path.isdir(word_dir)
+  # data augmentation
+  print('data augmentation for %s' % word)
+  add_noise(word_dir)
+  timeshift(word_dir)
+  split_to_time(word_dir)
+  resample_wavs(word_dir, target_sample_rate=TARGET_SAMPLE_RATE)
+
 input_wav_paths_and_labels = []
 for i, word in enumerate(WORDS):
   wav_paths = glob.glob(os.path.join(DATA_ROOT, word, "*_%shz.wav" % TARGET_SAMPLE_RATE))
@@ -233,7 +212,7 @@ model.compile(optimizer="sgd", loss="sparse_categorical_crossentropy", metrics=[
 print(model.summary())
 
 # Train the model.
-model.fit(xs, ys, batch_size=256, validation_split=0.3, shuffle=True, epochs=50)
+model.fit(xs, ys, batch_size=256, validation_split=0.3, shuffle=True, epochs=60)
 
 # Convert the model to TensorFlow.js Layers model format.
 
@@ -244,24 +223,3 @@ tfjs.converters.save_keras_model(model, tfjs_model_dir)
 metadata = {"words": ["_background_noise_"] + list(WORDS[1:]), "frameSize": model.input_shape[-2]}
 with open(os.path.join(tfjs_model_dir, "metadata.json"), "w") as f:
   json.dump(metadata, f)
-
-# Convert the model to TFLite.
-
-# We need to combine the preprocessing model and the newly trained 3-class model
-# so that the resultant model will be able to preform STFT and spectrogram
-# calculation on mobile devices (i.e., without web browser's WebAudio).
-
-combined_model = tf.keras.Sequential(name='CombinedModel')
-combined_model.add(preproc_model)
-combined_model.add(model)
-combined_model.build([None, EXPECTED_WAVEFORM_LEN])
-combined_model.summary()
-
-tflite_output_path = 'tfjs-sc-model/combined_model.tflite'
-converter = tf.lite.TFLiteConverter.from_keras_model(combined_model)
-converter.target_spec.supported_ops = [
-    tf.lite.OpsSet.TFLITE_BUILTINS, tf.lite.OpsSet.SELECT_TF_OPS
-]
-with open(tflite_output_path, 'wb') as f:
-    f.write(converter.convert())
-print("Saved tflite file at: %s" % tflite_output_path)
