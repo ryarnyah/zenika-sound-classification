@@ -1,40 +1,54 @@
-import * as tf from '@tensorflow/tfjs';
+import {BrowserFftFeatureExtractor} from '@tensorflow-models/speech-commands/dist/browser_fft_extractor';
+import {normalize} from '@tensorflow-models/speech-commands/dist/browser_fft_utils';
 import * as speechCommands from '@tensorflow-models/speech-commands';
 
+const worker = new Worker('worker.js')
+
 const recognizer = speechCommands.create(
-    'BROWSER_FFT',
-    null,
-    'http://localhost:8080/model/model.json',  // URL to the custom model's model.json
-    'http://localhost:8080/model/metadata.json'  // URL to the custom model's metadata.json
+  'BROWSER_FFT',
+  null,
+  'http://localhost:8080/model/model.json',  // URL to the custom model's model.json
+  'http://localhost:8080/model/metadata.json'  // URL to the custom model's metadata.json
 );
 
-recognizer.ensureModelLoaded()
-    .then(() => {
+recognizer.ensureModelLoaded().then(() => {
+  // shape: (4) [1, 43, 232, 1]
+  const shape = recognizer.modelInputShape();
+  console.log(shape);
 
-        // See the array of words that the recognizer is trained to recognize.
-        console.log(recognizer.wordLabels());
-
-        // `listen()` takes two arguments:
-        // 1. A callback function that is invoked anytime a word is recognized.
-        // 2. A configuration object with adjustable fields such a
-        //    - includeSpectrogram
-        //    - probabilityThreshold
-        //    - includeEmbedding
-        recognizer.listen(result => {
-            // - result.scores contains the probability scores that correspond to
-            //   recognizer.wordLabels().
-            // - result.spectrogram contains the spectrogram of the recognized word.
-            if (result.scores.indexOf(Math.max.apply(Math, result.scores)) > 0) {
-                document.getElementById('euhh').style.display = 'block';
-                //document.getElementById('beep').play();
-                setTimeout(function() {
-                    document.getElementById('euhh').style.display = 'none';
-                }, 1500);
-                console.log(result.scores);
-            }
-        }, {
-            includeSpectrogram: true,
-            probabilityThreshold: 0.9,
-            overlapFactor: 0.2
-        });
+  function recognizeOnline() {
+    var audioDataExtractor;
+    return new Promise((resolve, reject) => {
+      const spectrogramCallback = async (x) => {
+        const normalizedX = normalize(x);
+        worker.postMessage({data: {
+          data: await normalizedX.data(),
+          shape: normalizedX.shape
+        }});
+        normalizedX.dispose();
+        return false;
+      };
+      audioDataExtractor = new BrowserFftFeatureExtractor({
+        numFramesPerSpectrogram: shape[1],
+        columnTruncateLength: shape[2],
+        suppressionTimeMillis: 0,
+        spectrogramCallback,
+        overlapFactor: 0.25
+      });
+      audioDataExtractor.start();
     });
+  }
+
+  worker.addEventListener("message", async (event) => {
+      const { result, wordLabels } = event.data;
+      if (result.indexOf(Math.max.apply(Math, result)) > 0) {
+          document.getElementById('euhh').style.display = 'block';
+          //document.getElementById('beep').play();
+          setTimeout(function() {
+              document.getElementById('euhh').style.display = 'none';
+          }, 1500);
+          console.log(result);
+      }
+    });
+  recognizeOnline().then(spectrogramData => worker.postMessage({data: spectrogramData}))
+});

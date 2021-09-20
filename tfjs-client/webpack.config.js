@@ -5,9 +5,23 @@ const CopyPlugin = require("copy-webpack-plugin");
 
 module.exports = {
     mode: 'development',
-    entry: './src/index.js',
+    entry: {
+        bundle: './src/index.js',
+        worker: './src/worker.js'
+    },
     output: {
         path: path.resolve(__dirname, 'dist'),
+        globalObject: `(() => {
+            if (typeof self !== 'undefined') {
+                return self;
+            } else if (typeof window !== 'undefined') {
+                return window;
+            } else if (typeof global !== 'undefined') {
+                return global;
+            } else {
+                return Function('return this')();
+            }
+        })()`
     },
     devServer: {
         open: true,
